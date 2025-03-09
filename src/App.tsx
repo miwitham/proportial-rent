@@ -34,12 +34,12 @@ import { z } from "zod";
 import {
   AddCircleOutlineRounded,
   CalculateRounded,
-  DeleteRounded,
+  DeleteOutlineRounded,
   NavigateNextRounded,
 } from "@mui/icons-material";
 
 const ParticipantBase = z.object({
-  name: z.string(),
+  name: z.string({ required_error: "Name is required." }),
   limited: z.boolean(),
   incomeType: z.enum(["hourly", "salary"]),
 });
@@ -47,22 +47,26 @@ const ParticipantBase = z.object({
 const Participant = z.discriminatedUnion("incomeType", [
   ParticipantBase.extend({
     incomeType: z.literal("hourly"),
-    hourlyRate: z.coerce.number().gt(0),
+    hourlyRate: z.coerce
+      .number()
+      .gt(0, "Hourly rate must be greater than zero."),
     hoursPerWeek: z.coerce
       .number()
-      .gt(0)
+      .gt(0, "Hours worked per week must be greater than zero.")
       .lt(24 * 7, "There are only 168 hours in a week..."),
   }),
   ParticipantBase.extend({
     incomeType: z.literal("salary"),
-    annualSalary: z.coerce.number().gt(0),
+    annualSalary: z.coerce
+      .number()
+      .gt(0, "Annual salary must be greater than zero."),
   }),
 ]);
 
 type Participant = z.infer<typeof Participant>;
 
 const BillPay = z.object({
-  amount: z.coerce.number().gt(0),
+  amount: z.coerce.number().gt(0, "Bill amount must be greater than zero."),
   maximumLimit: z.coerce.number(),
   minimumLimit: z.coerce.number(),
   participants: Participant.array(),
@@ -117,13 +121,9 @@ function App() {
     // Each participants monthly gross income
     const participantMonthlyGross = data.participants.map((participant) => {
       if (participant.incomeType === "hourly") {
-        return (
-          Math.round(
-            participant.hourlyRate * participant.hoursPerWeek * 4 * 100
-          ) / 100
-        );
+        return participant.hourlyRate * participant.hoursPerWeek * 4;
       } else {
-        return Math.round((participant.annualSalary / 12) * 100) / 100;
+        return participant.annualSalary / 12;
       }
     });
 
@@ -140,14 +140,13 @@ function App() {
 
     // Each participants percentage of income relative to the total
     const incomePercentages = participantMonthlyGross.map(
-      (income) => Math.round((income / totalGross) * 10000) / 100
+      (income) => (income / totalGross) * 100
     );
 
     // Calculate the amount each participant should pay without limits
     const nonLimitedDues = participantMonthlyGross.map((_income, index) => {
       const percentage = incomePercentages[index];
-      const amount = data.amount * (percentage / 100);
-      return Math.round(amount * 100) / 100;
+      return data.amount * (percentage / 100);
     });
 
     // The difference between the total amount due and the total amount paid
@@ -161,10 +160,10 @@ function App() {
       if (participant.limited) {
         const max = data.maximumLimit || 0;
         const min = data.minimumLimit || 0;
-        if (due > max) {
+        if (max && due > max) {
           deltaBalance += due - max;
           return max;
-        } else if (due < min) {
+        } else if (min && due < min) {
           deltaBalance += due - min;
           return min;
         } else {
@@ -183,8 +182,6 @@ function App() {
         return due;
       }
     });
-
-    console.log("adjustedDues", adjustedDues);
 
     setTotalGross(totalGross);
     setResults(
@@ -229,25 +226,28 @@ function App() {
             <Controller
               name="amount"
               control={control}
-              render={({ field, fieldState }) => (
-                <TextField
-                  {...field}
-                  error={Boolean(fieldState.error)}
-                  helperText={fieldState.error?.message}
-                  label={
-                    <Tooltip title="The total amount due each month.">
-                      <label>Amount Due</label>
-                    </Tooltip>
-                  }
-                  slotProps={{
-                    input: {
-                      startAdornment: (
-                        <InputAdornment position="start">$</InputAdornment>
-                      ),
-                    },
-                  }}
-                />
-              )}
+              render={({ field, fieldState }) => {
+                console.log(fieldState.error);
+                return (
+                  <TextField
+                    {...field}
+                    error={Boolean(fieldState.error)}
+                    helperText={fieldState.error?.message}
+                    label={
+                      <Tooltip title="The total amount due each month.">
+                        <label>Amount Due</label>
+                      </Tooltip>
+                    }
+                    slotProps={{
+                      input: {
+                        startAdornment: (
+                          <InputAdornment position="start">$</InputAdornment>
+                        ),
+                      },
+                    }}
+                  />
+                );
+              }}
             />
             <Controller
               name="minimumLimit"
@@ -255,7 +255,11 @@ function App() {
               render={({ field }) => (
                 <TextField
                   {...field}
-                  label="Minimum Limit"
+                  label={
+                    <Tooltip title="The minimum amount a participant who is subject to the limits can pay.">
+                      <label>Minimum Limit</label>
+                    </Tooltip>
+                  }
                   slotProps={{
                     input: {
                       startAdornment: (
@@ -272,7 +276,11 @@ function App() {
               render={({ field }) => (
                 <TextField
                   {...field}
-                  label="Maximum Limit"
+                  label={
+                    <Tooltip title="The maximum amount a participant who is subject to the limits can pay.">
+                      <label>Maximum Limit</label>
+                    </Tooltip>
+                  }
                   slotProps={{
                     input: {
                       startAdornment: (
@@ -401,7 +409,7 @@ function App() {
                     }}
                     sx={{ aspectRatio: 1 / 1 }}
                   >
-                    <DeleteRounded />
+                    <DeleteOutlineRounded />
                   </IconButton>
                 </Stack>
               </Stack>
